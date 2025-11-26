@@ -645,6 +645,13 @@ void WLED::initConnection()
   ws.onEvent(wsEvent);
   #endif
 
+#ifdef WLED_ETH_ONLY
+  // ESP32-P4 Ethernet-only mode - skip all WiFi operations
+  DEBUG_PRINTLN(F("Ethernet-only mode - WiFi disabled."));
+  lastReconnectAttempt = millis();
+  return;
+#endif
+
 #ifndef WLED_DISABLE_ESPNOW
   if (statusESPNow == ESP_NOW_STATE_ON) {
     DEBUG_PRINTLN(F("ESP-NOW stopping."));
@@ -784,6 +791,16 @@ void WLED::handleConnection()
   #ifdef WLED_DEBUG
   const unsigned long nowS = now/1000;
   #endif
+
+#ifdef WLED_ETH_ONLY
+  // ESP32-P4 Ethernet-only mode - just check if Ethernet is connected
+  if (!interfacesInited && Network.isConnected()) {
+    DEBUG_PRINTLN(F("Ethernet connected - initializing interfaces."));
+    initInterfaces();
+  }
+  return;
+#endif
+
   const bool wifiConfigured = WLED_WIFI_CONFIGURED;
 
   // ignore connection handling if WiFi is configured and scan still running

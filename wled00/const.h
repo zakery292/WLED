@@ -75,6 +75,10 @@ constexpr size_t FIXED_PALETTE_COUNT = DYNAMIC_PALETTE_COUNT + FASTLED_PALETTE_C
     #define WLED_MAX_DIGITAL_CHANNELS 12    // x4 RMT + x8 I2S-LCD
     //#define WLED_MAX_ANALOG_CHANNELS 8
     #define WLED_MIN_VIRTUAL_BUSSES 6       // no longer used for bus creation but used to distinguish S2/S3 in UI
+  #elif defined(CONFIG_IDF_TARGET_ESP32P4)  // P4: 4 RMT channels, no I2S LED support
+    #define WLED_MAX_DIGITAL_CHANNELS 4     // x4 RMT only (I2S not supported for LEDs on P4)
+    //#define WLED_MAX_ANALOG_CHANNELS 8    // LEDC available
+    #define WLED_MIN_VIRTUAL_BUSSES 6
   #else
     // the last digital bus (I2S0) will prevent Audioreactive usermod from functioning
     #define WLED_MAX_DIGITAL_CHANNELS 16    // x1/x8 I2S1 + x8 RMT
@@ -366,8 +370,6 @@ static_assert(WLED_MAX_BUSSES <= 32, "WLED_MAX_BUSSES exceeds hard limit");
 #define BTN_TYPE_TOUCH_SWITCH     9
 
 //Ethernet board types
-#define WLED_NUM_ETH_TYPES        13
-
 #define WLED_ETH_NONE              0
 #define WLED_ETH_WT32_ETH01        1
 #define WLED_ETH_ESP32_POE         2
@@ -381,6 +383,12 @@ static_assert(WLED_MAX_BUSSES <= 32, "WLED_MAX_BUSSES exceeds hard limit");
 #define WLED_ETH_SERG74           10
 #define WLED_ETH_ESP32_POE_WROVER 11
 #define WLED_ETH_LILYGO_T_POE_PRO 12
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+  #define WLED_ETH_ESP32P4_NANO   13  // ESP32-P4-NANO with IP101GRI PHY
+  #define WLED_NUM_ETH_TYPES      14
+#else
+  #define WLED_NUM_ETH_TYPES      13
+#endif
 
 //Hue error codes
 #define HUE_ERROR_INACTIVE        0
@@ -474,6 +482,8 @@ static_assert(WLED_MAX_BUSSES <= 32, "WLED_MAX_BUSSES exceeds hard limit");
     #define MAX_LEDS 2048 //due to memory constraints S2
   #elif defined(CONFIG_IDF_TARGET_ESP32C3)
     #define MAX_LEDS 4096
+  #elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    #define MAX_LEDS 32768 // P4-NANO has 32MB PSRAM - go big!
   #else
     #define MAX_LEDS 16384
   #endif

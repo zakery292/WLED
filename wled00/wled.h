@@ -115,7 +115,7 @@
 #include <Wire.h>
 #include <SPI.h>
 
-#include "src/dependencies/network/Network.h"
+#include "src/dependencies/network/WLEDNetwork.h"
 
 #ifdef WLED_USE_MY_CONFIG
   #include "my_config.h"
@@ -159,6 +159,7 @@
 #endif
 
 #define ARDUINOJSON_DECODE_UNICODE 0
+// ArduinoJson and AsyncJson (bundled versions for Aircoookie ESPAsyncWebServer compat)
 #include "src/dependencies/json/AsyncJson-v6.h"
 #include "src/dependencies/json/ArduinoJson-v6.h"
 

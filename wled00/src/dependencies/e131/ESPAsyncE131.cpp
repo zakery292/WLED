@@ -18,7 +18,7 @@
 */
 
 #include "ESPAsyncE131.h"
-#include "../network/Network.h"
+#include "../network/WLEDNetwork.h"
 #include <string.h>
 
 // E1.17 ACN Packet Identifier

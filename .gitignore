@@ -25,3 +25,11 @@ wled-update.sh
 /wled00/Release
 /wled00/wled00.ino.cpp
 /wled00/html_*.h
+
+# ESP-IDF build artifacts
+/build/
+/managed_components/
+/components/
+/dependencies.lock
+/sdkconfig
+/sdkconfig.old

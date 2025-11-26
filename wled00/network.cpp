@@ -4,7 +4,16 @@
 
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_ETHERNET)
-// The following six pins are neither configurable nor
+
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+// ESP32-P4 RMII pins - configured via Kconfig, these are the defaults
+// The RMII data/clock pins are managed by the EMAC driver
+const managed_pin_type esp32_nonconfigurable_ethernet_pins[WLED_ETH_RSVD_PINS_COUNT] = {
+    { 50, false }, // REF_CLK - 50MHz from PHY
+    { 28, false }, // CRS_DV
+};
+#else
+// Classic ESP32 - the following six pins are neither configurable nor
 // can they be re-assigned through IOMUX / GPIO matrix.
 // See https://docs.espressif.com/projects/esp-idf/en/latest/esp32/hw-reference/esp32/get-started-ethernet-kit-v1.1.html#ip101gri-phy-interface
 const managed_pin_type esp32_nonconfigurable_ethernet_pins[WLED_ETH_RSVD_PINS_COUNT] = {
@@ -15,6 +24,7 @@ const managed_pin_type esp32_nonconfigurable_ethernet_pins[WLED_ETH_RSVD_PINS_CO
     { 26, false }, // RMII EMAC RXD1   == Second bit of received data
     { 27, true  }, // RMII EMAC CRS_DV == Carrier Sense and RX Data Valid
 };
+#endif
 
 const ethernet_settings ethernetBoards[] = {
   // None
@@ -143,8 +153,24 @@ const ethernet_settings ethernetBoards[] = {
     23,			              // eth_mdc,
     18,			              // eth_mdio,
     ETH_PHY_LAN8720,      // eth_type,
-    ETH_CLOCK_GPIO0_OUT	// eth_clk_mode
+    ETH_CLOCK_GPIO0_OUT	  // eth_clk_mode
+  },
+
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+  // ESP32-P4-NANO with IP101GRI PHY (index 13)
+  // RMII Interface: TXD0=GPIO34, TXD1=GPIO35, TX_EN=GPIO49
+  //                 RXD0=GPIO29, RXD1=GPIO30, CRS_DV=GPIO28
+  // REF_CLK=GPIO50 (external 50MHz from PHY)
+  // MDIO=GPIO52, MDC=GPIO31, PHY_RESET=GPIO51
+  {
+    1,                    // eth_address (IP101 default)
+    51,                   // eth_power (PHY reset pin)
+    31,                   // eth_mdc
+    52,                   // eth_mdio
+    ETH_PHY_IP101,        // eth_type
+    EMAC_CLK_EXT_IN       // eth_clk_mode - external clock from PHY
   }
+#endif
 };
 
 bool initEthernet()
@@ -167,6 +193,40 @@ bool initEthernet()
 
   // Ethernet initialization should only succeed once -- else reboot required
   ethernet_settings es = ethernetBoards[ethernetType];
+
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+  // ESP32-P4 has simpler pin allocation - RMII pins are fixed in hardware
+  managed_pin_type pinsToAllocate[4] = {
+    esp32_nonconfigurable_ethernet_pins[0],  // REF_CLK
+    esp32_nonconfigurable_ethernet_pins[1],  // CRS_DV
+    { (int8_t)es.eth_mdc,   true },   // MDC is output
+    { (int8_t)es.eth_mdio,  true },   // MDIO is bidirectional
+  };
+  
+  if (!PinManager::allocateMultiplePins(pinsToAllocate, 4, PinOwner::Ethernet)) {
+    DEBUG_PRINTLN(F("initE: Failed to allocate ethernet pins"));
+    return false;
+  }
+  
+  // Allocate power/reset pin if used
+  if (es.eth_power >= 0) {
+    if (!PinManager::allocatePin(es.eth_power, true, PinOwner::Ethernet)) {
+      DEBUG_PRINTLN(F("initE: Failed to allocate PHY power pin"));
+      for (managed_pin_type mpt : pinsToAllocate) {
+        PinManager::deallocatePin(mpt.pin, PinOwner::Ethernet);
+      }
+      return false;
+    }
+    // Reset the PHY
+    pinMode(es.eth_power, OUTPUT);
+    digitalWrite(es.eth_power, LOW);
+    delay(1);
+    digitalWrite(es.eth_power, HIGH);
+    delay(10);
+  }
+  
+#else
+  // Classic ESP32 pin allocation
   managed_pin_type pinsToAllocate[10] = {
     // first six pins are non-configurable
     esp32_nonconfigurable_ethernet_pins[0],
@@ -202,6 +262,7 @@ bool initEthernet()
     DEBUG_PRINTLN(F("initE: Failed to allocate ethernet pins"));
     return false;
   }
+#endif
 
   /*
   For LAN8720 the most correct way is to perform clean reset each time before init
@@ -221,15 +282,17 @@ bool initEthernet()
   }
   #endif
 
+  // Arduino-ESP32 3.x ETH.begin() signature changed:
+  // bool begin(eth_phy_type_t type, int32_t phy_addr, int mdc, int mdio, int power, eth_clock_mode_t clk_mode)
   if (!ETH.begin(
-                (uint8_t) es.eth_address,
-                (int)     es.eth_power,
-                (int)     es.eth_mdc,
-                (int)     es.eth_mdio,
-                (eth_phy_type_t)   es.eth_type,
-                (eth_clock_mode_t) es.eth_clk_mode
+                es.eth_type,       // PHY type first
+                es.eth_address,    // PHY address
+                es.eth_mdc,        // MDC pin
+                es.eth_mdio,       // MDIO pin
+                es.eth_power,      // Power/Reset pin
+                es.eth_clk_mode    // Clock mode
                 )) {
-    DEBUG_PRINTLN(F("initC: ETH.begin() failed"));
+    DEBUG_PRINTLN(F("initE: ETH.begin() failed"));
     // de-allocate the allocated pins
     for (managed_pin_type mpt : pinsToAllocate) {
       PinManager::deallocatePin(mpt.pin, PinOwner::Ethernet);

@@ -1142,9 +1142,9 @@ String computeSHA1(const String& input) {
     mbedtls_sha1_context ctx;
 
     mbedtls_sha1_init(&ctx);
-    mbedtls_sha1_starts_ret(&ctx);
-    mbedtls_sha1_update_ret(&ctx, (const unsigned char*)input.c_str(), input.length());
-    mbedtls_sha1_finish_ret(&ctx, shaResult);
+    mbedtls_sha1_starts(&ctx);
+    mbedtls_sha1_update(&ctx, (const unsigned char*)input.c_str(), input.length());
+    mbedtls_sha1_finish(&ctx, shaResult);
     mbedtls_sha1_free(&ctx);
 
     // Convert to hexadecimal string
@@ -1158,7 +1158,8 @@ String computeSHA1(const String& input) {
   #endif
 }
 
-#ifdef ESP32
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32P4)
+// ESP32-P4 has different eFuse layout - skip raw block dump
 static String dump_raw_block(esp_efuse_block_t block)
 {
   const int WORDS = 8; // ESP32: 8×32-bit words per block i.e. 256bits
@@ -1207,10 +1208,13 @@ String getDeviceId() {
   String deviceString = String(macStr) + "WLED" + ESP.getFlashChipId();
 #else
   String deviceString = String(macStr) + "WLED" + ESP.getChipModel() + ESP.getChipRevision();
+  #if !defined(CONFIG_IDF_TARGET_ESP32P4)
+  // ESP32-P4 has different eFuse layout - skip raw block dump
   deviceString += dump_raw_block(EFUSE_BLK0);
   deviceString += dump_raw_block(EFUSE_BLK1);
   deviceString += dump_raw_block(EFUSE_BLK2);
   deviceString += dump_raw_block(EFUSE_BLK3);
+  #endif
 #endif
   String firstHash = computeSHA1(deviceString);
 

@@ -6,13 +6,17 @@
 #include <IPAddress.h>
 #ifdef ARDUINO_ARCH_ESP32
 #include <ESPmDNS.h>
-#include "src/dependencies/network/Network.h" // for isConnected() (& WiFi)
+#include "src/dependencies/network/WLEDNetwork.h" // for isConnected() (& WiFi)
 #include "driver/ledc.h"
 #include "soc/ledc_struct.h"
-  #if !(defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3))
+  // Arduino-ESP32 3.x compatibility: mutex locking is now internal
+  #if ESP_ARDUINO_VERSION_MAJOR >= 3
+    #define LEDC_MUTEX_LOCK()
+    #define LEDC_MUTEX_UNLOCK()
+  #elif !(defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3))
     #define LEDC_MUTEX_LOCK()    do {} while (xSemaphoreTake(_ledc_sys_lock, portMAX_DELAY) != pdPASS)
     #define LEDC_MUTEX_UNLOCK()  xSemaphoreGive(_ledc_sys_lock)
-    extern xSemaphoreHandle _ledc_sys_lock;
+    extern SemaphoreHandle_t _ledc_sys_lock;
   #else
     #define LEDC_MUTEX_LOCK()
     #define LEDC_MUTEX_UNLOCK()
@@ -466,9 +470,15 @@ BusPwm::BusPwm(const BusConfig &bc)
       #ifdef ESP8266
       pinMode(_pins[i], OUTPUT);
       #else
+      #if ESP_ARDUINO_VERSION_MAJOR >= 3
+      // Arduino-ESP32 3.x: ledcAttach replaces ledcSetup + ledcAttachPin
+      ledcAttach(_pins[i], _frequency, _depth - (dithering*4));
+      unsigned channel = _ledcStart + i;
+      #else
       unsigned channel = _ledcStart + i;
       ledcSetup(channel, _frequency, _depth - (dithering*4)); // with dithering _frequency doesn't really matter as resolution is 8 bit
       ledcAttachPin(_pins[i], channel);
+      #endif
       // LEDC timer reset credit @dedehai
       uint8_t group = (channel / 8), timer = ((channel / 2) % 4); // same fromula as in ledcSetup()
       ledc_timer_rst((ledc_mode_t)group, (ledc_timer_t)timer); // reset timer so all timers are almost in sync (for phase shift)
@@ -594,8 +604,13 @@ void BusPwm::show() {
     unsigned ch = channel%8;  // group channel
     // directly write to LEDC struct as there is no HAL exposed function for dithering
     // duty has 20 bit resolution with 4 fractional bits (24 bits in total)
+    #if defined(CONFIG_IDF_TARGET_ESP32P4)
+    // ESP32-P4 has a different LEDC struct layout - use HAL functions instead
+    ledc_set_duty((ledc_mode_t)gr, (ledc_channel_t)ch, duty << ((!dithering)*4));
+    #else
     LEDC.channel_group[gr].channel[ch].duty.duty = duty << ((!dithering)*4);  // lowest 4 bits are used for dithering, shift by 4 bits if not using dithering
     LEDC.channel_group[gr].channel[ch].hpoint.hpoint = hPoint >> bitShift;    // hPoint is at _depth resolution (needs shifting if dithering)
+    #endif
     ledc_update_duty((ledc_mode_t)gr, (ledc_channel_t)ch);
     #endif
 
@@ -632,7 +647,7 @@ void BusPwm::deallocatePins() {
     #ifdef ESP8266
     digitalWrite(_pins[i], LOW); //turn off PWM interrupt
     #else
-    if (_ledcStart < WLED_MAX_ANALOG_CHANNELS) ledcDetachPin(_pins[i]);
+    if (_ledcStart < WLED_MAX_ANALOG_CHANNELS) ledcDetach(_pins[i]);
     #endif
   }
   #ifdef ARDUINO_ARCH_ESP32

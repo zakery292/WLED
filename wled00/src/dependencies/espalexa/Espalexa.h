@@ -47,7 +47,7 @@
  #endif
 #endif
 #include <WiFiUdp.h>
-#include "../network/Network.h"
+#include "../network/WLEDNetwork.h"
 
 #ifdef ESPALEXA_DEBUG
  #pragma message "Espalexa 2.7.1 debug mode"

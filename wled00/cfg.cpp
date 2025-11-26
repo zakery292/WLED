@@ -912,6 +912,10 @@ void serializeConfig(JsonObject root) {
     if (ethernetBoards[ethernetType].eth_power>=0)     pins.add(ethernetBoards[ethernetType].eth_power);
     if (ethernetBoards[ethernetType].eth_mdc>=0)       pins.add(ethernetBoards[ethernetType].eth_mdc);
     if (ethernetBoards[ethernetType].eth_mdio>=0)      pins.add(ethernetBoards[ethernetType].eth_mdio);
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+    // P4 uses GPIO50 for REF_CLK (external from PHY)
+    pins.add(50);
+#else
     switch (ethernetBoards[ethernetType].eth_clk_mode) {
       case ETH_CLOCK_GPIO0_IN:
       case ETH_CLOCK_GPIO0_OUT:
@@ -924,6 +928,7 @@ void serializeConfig(JsonObject root) {
         pins.add(17);
         break;
     }
+#endif
   }
 #endif
 

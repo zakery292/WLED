@@ -1,0 +1,12 @@
+# ESP-IDF Component Manager manifest for WLED
+# Core dependencies only - additional libs are in components/
+
+dependencies:
+  # Arduino-ESP32 core - the essential component
+  espressif/arduino-esp32: "^3.1.0"
+  
+  # Note: AsyncTCP and ESPAsyncWebServer are in components/ dir
+  # Using Aircoookie's fork for full WLED compatibility
+
+  idf:
+    version: ">=5.0.0"
